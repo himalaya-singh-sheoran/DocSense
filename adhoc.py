@@ -4,7 +4,7 @@ import random
 
 def minimal_augmentation(image):
     # Randomly select an augmentation
-    augmentation = random.choice(['flip', 'rotate', 'brightness', 'contrast', 'color_shift', 'noise', 'sharp', 'filter'])
+    augmentation = random.choice(['flip', 'rotate', 'brightness', 'contrast', 'color_shift', 'noise', 'sharpen'])
 
     # Store original image dimensions
     rows, cols, _ = image.shape
@@ -37,20 +37,10 @@ def minimal_augmentation(image):
         # Add subtle noise to the image
         noise = np.random.normal(0, 5, (rows, cols, 3)).astype(np.uint8)
         augmented_image = np.clip(image.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-    elif augmentation == 'sharp':
-        # Apply random sharpening filter
-        kernel_sharpening = np.array([[-1, -1, -1],
-                                      [-1, 9, -1],
-                                      [-1, -1, -1]])
-        augmented_image = cv2.filter2D(image, -1, kernel_sharpening)
-    elif augmentation == 'filter':
-        # Apply a random filter (e.g., blur, edge enhancement)
-        filter_type = random.choice(['blur', 'edge'])
-        if filter_type == 'blur':
-            kernel_size = random.choice([3, 5])
-            augmented_image = cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
-        elif filter_type == 'edge':
-            augmented_image = cv2.Canny(image, 100, 200)
+    elif augmentation == 'sharpen':
+        # Apply sharpening filter to the image
+        kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]], dtype=np.float32)
+        augmented_image = cv2.filter2D(image, -1, kernel)
 
     return augmented_image
 
@@ -66,3 +56,4 @@ cv2.imshow('Original Image', input_image)
 cv2.imshow('Augmented Image', augmented_image)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+
