@@ -1,4 +1,3 @@
-
 import cv2
 import numpy as np
 
@@ -31,4 +30,3 @@ def detect_text_swt(image_path):
 
 # Replace 'your_image_path.jpg' with the actual path to your image
 detect_text_swt('your_image_path.jpg')
-
