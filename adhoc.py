@@ -1,5 +1,5 @@
+
 import cv2
-import imreg_dft
 import numpy as np
 
 def detect_text_swt(image_path):
@@ -10,10 +10,11 @@ def detect_text_swt(image_path):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # Apply Stroke Width Transform
-    swt = imreg_dft.stroke_width_transform(gray)
+    swt = cv2.ximgproc.createStrokesWTSigma()
+    swt_map = swt.computeSWT(gray)
 
     # Threshold the result to get text regions
-    _, swt_thresholded = cv2.threshold(swt, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    _, swt_thresholded = cv2.threshold(swt_map, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     # Find contours in the thresholded image
     contours, _ = cv2.findContours(swt_thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -30,5 +31,4 @@ def detect_text_swt(image_path):
 
 # Replace 'your_image_path.jpg' with the actual path to your image
 detect_text_swt('your_image_path.jpg')
-
 
