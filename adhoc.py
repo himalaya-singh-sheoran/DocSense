@@ -14,23 +14,15 @@ def remove_straight_lines(image_path):
     # Apply Canny edge detection
     edges = cv2.Canny(blurred, 50, 150)
 
-    # Apply Hough Line Transform to detect lines
-    lines = cv2.HoughLines(edges, 1, np.pi / 180, threshold=100)
+    # Use Hough Line Transform to detect lines
+    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, minLineLength=100, maxLineGap=10)
 
     # Create a mask to fill detected lines
     mask = np.zeros_like(edges)
 
     if lines is not None:
         for line in lines:
-            rho, theta = line[0]
-            a = np.cos(theta)
-            b = np.sin(theta)
-            x0 = a * rho
-            y0 = b * rho
-            x1 = int(x0 + 1000 * (-b))
-            y1 = int(y0 + 1000 * (a))
-            x2 = int(x0 - 1000 * (-b))
-            y2 = int(y0 - 1000 * (a))
+            x1, y1, x2, y2 = line[0]
             cv2.line(mask, (x1, y1), (x2, y2), 255, 2)
 
     # Invert the mask
