@@ -38,18 +38,15 @@ def join_close_and_intersecting_boxes(image_path, proximity_threshold=20):
     while bounding_boxes:
         current_box = bounding_boxes.pop(0)
         merged_box = list(current_box)
-        merged = False
-        for box in bounding_boxes:
-            if intersect(merged_box, box) or close(merged_box, box):
-                # Merge intersecting or close boxes
-                merged_box[0] = min(merged_box[0], box[0])
-                merged_box[1] = min(merged_box[1], box[1])
-                merged_box[2] = max(merged_box[2], box[2])
-                merged_box[3] = max(merged_box[3], box[3])
-                bounding_boxes.remove(box)
-                merged = True
-        if not merged:
-            merged_boxes.append(tuple(merged_box))
+        overlapping_boxes = [box for box in bounding_boxes if intersect(merged_box, box) or close(merged_box, box)]
+        for box in overlapping_boxes:
+            # Merge overlapping or close boxes
+            merged_box[0] = min(merged_box[0], box[0])
+            merged_box[1] = min(merged_box[1], box[1])
+            merged_box[2] = max(merged_box[2], box[2])
+            merged_box[3] = max(merged_box[3], box[3])
+            bounding_boxes.remove(box)
+        merged_boxes.append(tuple(merged_box))
 
     # Draw merged bounding boxes on the original image
     for box in merged_boxes:
@@ -63,5 +60,4 @@ def join_close_and_intersecting_boxes(image_path, proximity_threshold=20):
 # Replace 'your_image_path.jpg' with the actual path to your image
 # Adjust the proximity_threshold as needed
 join_close_and_intersecting_boxes('your_image_path.jpg', proximity_threshold=20)
-
 
