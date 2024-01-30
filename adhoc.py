@@ -1,52 +1,76 @@
 import torch
 import torch.nn as nn
-import torchvision.models as models
+import torch.nn.functional as F
 
-class TransformerEncoder(nn.Module):
-    def __init__(self, d_model=256, nhead=8, num_layers=2):
-        super(TransformerEncoder, self).__init__()
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead)
-        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
-
-    def forward(self, x):
-        return self.transformer_encoder(x)
-
-class SegmentationModel(nn.Module):
-    def __init__(self, num_classes, d_model=256, nhead=8, num_encoder_layers=2):
-        super(SegmentationModel, self).__init__()
-
-        # ResNet18 feature extractor
-        self.resnet18 = models.resnet18(pretrained=False)
-        self.feature_extractor = nn.Sequential(*list(self.resnet18.children())[:-2])
-
-        # Transformer-based encoder
-        self.transformer_encoder = TransformerEncoder(d_model=d_model, nhead=nhead, num_layers=num_encoder_layers)
-
-        # Decoder
-        self.decoder = nn.ConvTranspose2d(d_model, num_classes, kernel_size=4, stride=2, padding=1)
+class CNNBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(CNNBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU()
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(out_channels)
 
     def forward(self, x):
-        # Feature extraction
-        features = self.feature_extractor(x)
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+        return x
 
-        # Flatten features
-        features = features.view(features.size(0), features.size(1), -1).permute(2, 0, 1)
+class Encoder(nn.Module):
+    def __init__(self, in_channels, cnn_out_channels, transformer_d_model=256, transformer_nhead=8, transformer_layers=2):
+        super(Encoder, self).__init__()
 
-        # Transformer-based encoding
-        encoded_features = self.transformer_encoder(features)
+        # CNN-based Encoder
+        self.cnn_block = CNNBlock(in_channels, cnn_out_channels)
 
-        # Reshape for decoder
-        encoded_features = encoded_features.permute(1, 2, 0).view(features.size(0), -1, features.size(2))
+        # Transformer-based Encoder
+        self.positional_encoding = nn.Parameter(torch.randn(512, 512, transformer_d_model))
+        self.transformer_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=transformer_d_model, nhead=transformer_nhead),
+            num_layers=transformer_layers
+        )
+
+    def forward(self, x):
+        x = self.cnn_block(x)
+        x = x.permute(2, 0, 1) + self.positional_encoding
+        x = self.transformer_encoder(x)
+        return x
+
+class Decoder(nn.Module):
+    def __init__(self, transformer_d_model=256, num_classes=1):
+        super(Decoder, self).__init__()
 
         # Decoder
+        self.decoder = nn.ConvTranspose2d(transformer_d_model, num_classes, kernel_size=4, stride=2, padding=1)
+
+    def forward(self, x):
+        x = self.decoder(x)
+        return F.sigmoid(x)  # Applying sigmoid for binary segmentation, adjust based on your task
+
+class EncoderDecoderModel(nn.Module):
+    def __init__(self, in_channels, cnn_out_channels, transformer_d_model=256, transformer_nhead=8, transformer_layers=2, num_classes=1):
+        super(EncoderDecoderModel, self).__init__()
+
+        # Encoder
+        self.encoder = Encoder(in_channels, cnn_out_channels, transformer_d_model, transformer_nhead, transformer_layers)
+
+        # Decoder
+        self.decoder = Decoder(transformer_d_model, num_classes)
+
+    def forward(self, x):
+        encoded_features = self.encoder(x)
         segmentation_mask = self.decoder(encoded_features)
-
         return segmentation_mask
 
 # Instantiate the model
-num_classes = 21  # Adjust based on your dataset
-model = SegmentationModel(num_classes)
+in_channels = 3  # Adjust based on the number of input channels (e.g., 3 for RGB)
+cnn_out_channels = 64  # Adjust based on your architecture
+model = EncoderDecoderModel(in_channels, cnn_out_channels)
 
 # Example usage
-input_image = torch.randn(1, 3, 256, 256)  # Adjust the input size accordingly
+input_image = torch.randn(1, in_channels, 512, 512)  # Adjust the input size and channels accordingly
 output_mask = model(input_image)
