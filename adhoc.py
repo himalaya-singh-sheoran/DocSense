@@ -20,15 +20,23 @@ class CNNBlock(nn.Module):
         x = self.relu(x)
         return x
 
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, height, width):
+        super(PositionalEncoding, self).__init__()
+        self.encoding = nn.Parameter(torch.zeros(d_model, height, width))
+
+    def forward(self, x):
+        return x + self.encoding
+
 class Encoder(nn.Module):
-    def __init__(self, in_channels, cnn_out_channels, transformer_d_model=256, transformer_nhead=8, transformer_layers=2):
+    def __init__(self, in_channels, cnn_out_channels, transformer_d_model=256, transformer_nhead=8, transformer_layers=2, height=512, width=512):
         super(Encoder, self).__init__()
 
         # CNN-based Encoder
         self.cnn_block = CNNBlock(in_channels, cnn_out_channels)
 
         # Transformer-based Encoder
-        self.positional_encoding = nn.Parameter(torch.randn(512, 512, transformer_d_model))
+        self.positional_encoding = PositionalEncoding(transformer_d_model, height, width)
         self.transformer_encoder = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(d_model=transformer_d_model, nhead=transformer_nhead),
             num_layers=transformer_layers
@@ -36,7 +44,10 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         x = self.cnn_block(x)
-        x = x.permute(2, 0, 1) + self.positional_encoding
+        x = x.permute(0, 2, 3, 1)  # Adjust the permutation to move channels to the last dimension
+        x = self.positional_encoding(x)
+        x = x.permute(3, 0, 1, 2)  # Move the channel dimension back to the first position
+        x = x.squeeze(2).permute(2, 0, 1)  # Squeeze the height dimension and then permute
         x = self.transformer_encoder(x)
         return x
 
@@ -48,6 +59,7 @@ class Decoder(nn.Module):
         self.decoder = nn.ConvTranspose2d(transformer_d_model, num_classes, kernel_size=4, stride=2, padding=1)
 
     def forward(self, x):
+        x = x.permute(1, 2, 0)  # Adjust the permutation to move channels to the last dimension
         x = self.decoder(x)
         return F.sigmoid(x)  # Applying sigmoid for binary segmentation, adjust based on your task
 
