@@ -1,30 +1,38 @@
-Page 1 coordinates:
-((20, 200), (266, 300)),
-    ((266, 200), (600, 300)),
-    ((20, 300), (266, 390 )),
-    ((266, 300), (600, 390)),
-    ((266, 435), (340, 465)),
-    ((340, 435), (370, 465)),
-    ((370, 435), (450, 465)),
-    ((450, 435), (530, 465)),
-    ((530, 435), (610, 465)),
-    ((550, 465), (610, 490)),
-    ((550, 490), (610, 515)),
-    ((550, 515), (610, 540)),
-    ((550, 540), (610, 590)),
-    ((200, 590), (610, 615)),
+import torch
+import torch.nn as nn
+import torchvision.models as models
+from transformers import ViTFeatureExtractor, ViTForImageSegmentation
 
+class SegmentationModel(nn.Module):
+    def __init__(self, num_classes):
+        super(SegmentationModel, self).__init__()
 
-boxes = [
-    ((20, 155), (275, 215)),
-    ((20, 215), (275, 295)),
-    ((275, 155), (610, 215)),
-    ((275, 215), (610, 295)),
-    ((20, 330), (60, 420 )),
-    ((60, 330), (275, 420 )),
-    ((275, 330), (324, 420 )),
-    ((324, 330), (465, 420 )),
-    ((465, 330), (610, 420 )),
-    ((465, 420), (610, 450 )),
-    ((200, 450), (610, 470 ))    
-]
+        # ResNet18 feature extractor
+        self.resnet18 = models.resnet18(pretrained=True)
+        self.feature_extractor = nn.Sequential(*list(self.resnet18.children())[:-2])
+
+        # Transformer-based encoder
+        self.transformer_encoder = ViTForImageSegmentation.from_pretrained('YOUR_TRANSFORMER_MODEL', num_labels=num_classes)
+
+        # Decoder
+        self.decoder = nn.ConvTranspose2d(256, num_classes, kernel_size=4, stride=2, padding=1)
+
+    def forward(self, x):
+        # Feature extraction
+        features = self.feature_extractor(x)
+
+        # Transformer-based encoding
+        encoded_features = self.transformer_encoder(features)
+
+        # Decoder
+        segmentation_mask = self.decoder(encoded_features['last_hidden_state'])
+
+        return segmentation_mask
+
+# Instantiate the model
+num_classes = 21  # Adjust based on your dataset
+model = SegmentationModel(num_classes)
+
+# Example usage
+input_image = torch.randn(1, 3, 256, 256)  # Adjust the input size accordingly
+output_mask = model(input_image)
