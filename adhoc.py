@@ -2,6 +2,15 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
+class TransformerEncoder(nn.Module):
+    def __init__(self, d_model=256, nhead=8, num_layers=2):
+        super(TransformerEncoder, self).__init__()
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead)
+        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
+
+    def forward(self, x):
+        return self.transformer_encoder(x)
+
 class SegmentationModel(nn.Module):
     def __init__(self, num_classes, d_model=256, nhead=8, num_encoder_layers=2):
         super(SegmentationModel, self).__init__()
@@ -11,8 +20,7 @@ class SegmentationModel(nn.Module):
         self.feature_extractor = nn.Sequential(*list(self.resnet18.children())[:-2])
 
         # Transformer-based encoder
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead)
-        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_encoder_layers)
+        self.transformer_encoder = TransformerEncoder(d_model=d_model, nhead=nhead, num_layers=num_encoder_layers)
 
         # Decoder
         self.decoder = nn.ConvTranspose2d(d_model, num_classes, kernel_size=4, stride=2, padding=1)
