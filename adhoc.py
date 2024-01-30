@@ -36,4 +36,14 @@ class SegmentationModel(nn.Module):
         encoded_features = encoded_features.permute(1, 2, 0).view(b, -1, h, w)
 
         # Decoder
-        segmentation_mask
+        segmentation_mask = self.decoder(encoded_features)
+
+        return segmentation_mask
+
+# Instantiate the model
+num_classes = 21  # Adjust based on your dataset
+model = SegmentationModel(num_classes)
+
+# Example usage
+input_image = torch.randn(1, 3, 256, 256)  # Adjust the input size accordingly
+output_mask = model(input_image)
