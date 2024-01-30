@@ -21,19 +21,14 @@ class SegmentationModel(nn.Module):
         # Feature extraction
         features = self.feature_extractor(x)
 
-        # Flatten features and permute for transformer input
-        b, c, h, w = features.size()
-        features = features.view(b, c, -1).permute(2, 0, 1)
+        # Flatten features
+        features = features.view(features.size(0), features.size(1), -1).permute(2, 0, 1)
 
         # Transformer-based encoding
-        # Add a positional encoding for spatial information
-        positional_encoding = torch.arange(0, features.size(0)).unsqueeze(1).expand(features.size(0), b).float().to(features.device)
-        features = features + positional_encoding
-
         encoded_features = self.transformer_encoder(features)
 
         # Reshape for decoder
-        encoded_features = encoded_features.permute(1, 2, 0).view(b, -1, h, w)
+        encoded_features = encoded_features.permute(1, 2, 0).view(features.size(0), -1, features.size(2))
 
         # Decoder
         segmentation_mask = self.decoder(encoded_features)
