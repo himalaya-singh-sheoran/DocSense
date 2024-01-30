@@ -26,20 +26,14 @@ class SegmentationModel(nn.Module):
         features = features.view(b, c, -1).permute(2, 0, 1)
 
         # Transformer-based encoding
+        # Add a positional encoding for spatial information
+        positional_encoding = torch.arange(0, features.size(0)).unsqueeze(1).expand(features.size(0), b).float().to(features.device)
+        features = features + positional_encoding
+
         encoded_features = self.transformer_encoder(features)
 
         # Reshape for decoder
         encoded_features = encoded_features.permute(1, 2, 0).view(b, -1, h, w)
 
         # Decoder
-        segmentation_mask = self.decoder(encoded_features)
-
-        return segmentation_mask
-
-# Instantiate the model
-num_classes = 21  # Adjust based on your dataset
-model = SegmentationModel(num_classes)
-
-# Example usage
-input_image = torch.randn(1, 3, 256, 256)  # Adjust the input size accordingly
-output_mask = model(input_image)
+        segmentation_mask
