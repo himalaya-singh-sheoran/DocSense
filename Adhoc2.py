@@ -25,44 +25,44 @@ class TransformerEncoderLayer(nn.Module):
 
         return src
 
-class SegmentationModelWithTransformer(nn.Module):
+class DenoisingModel(nn.Module):
     def __init__(self, in_channels, out_channels, transformer_layers=2, d_model=128, nhead=4):
-        super(SegmentationModelWithTransformer, self).__init__()
+        super(DenoisingModel, self).__init__()
 
-        # Encoder with Transformer layers
+        # Transformer Encoder with additional convolutional layers
         self.encoder = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, d_model, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            TransformerEncoderLayer(d_model, nhead),
         )
 
-        self.transformer_layers = nn.ModuleList([
-            TransformerEncoderLayer(d_model, nhead) for _ in range(transformer_layers)
-        ])
-
-        # Decoder remains the same
-        # ...
+        # Decoder
+        self.decoder = nn.Sequential(
+            nn.Conv2d(d_model, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, out_channels, kernel_size=3, padding=1),
+            nn.Sigmoid()  # Assuming the output is in the range [0, 1]
+        )
 
     def forward(self, x):
         x = self.encoder(x)
-
-        # Apply transformer layers
-        for layer in self.transformer_layers:
-            x = layer(x)
-
         x = self.decoder(x)
         return x
 
 # Instantiate the model
 in_channels = 3  # Input channels (e.g., for RGB images)
-out_channels = 1  # Output channels for binary segmentation
+out_channels = 3  # Output channels for denoising (RGB)
 
-# Ensure the model can handle 512x512 images
-input_tensor = torch.randn((1, in_channels, 512, 512))
-model = SegmentationModelWithTransformer(in_channels, out_channels)
-output_tensor = model(input_tensor)
-
-print("Input size:", input_tensor.shape)
-print("Output size:", output_tensor.shape)
+# Ensure the model can handle 256x256 images (adjust as needed)
+input_tensor = torch.randn((1, in_channels, 256,
 
