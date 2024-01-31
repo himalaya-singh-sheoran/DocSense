@@ -64,5 +64,9 @@ in_channels = 3  # Input channels (e.g., for RGB images)
 out_channels = 3  # Output channels for denoising (RGB)
 
 # Ensure the model can handle 256x256 images (adjust as needed)
-input_tensor = torch.randn((1, in_channels, 256,
+input_tensor = torch.randn((1, in_channels, 256, 256))
+model = DenoisingModel(in_channels, out_channels)
+output_tensor = model(input_tensor)
 
+print("Input size:", input_tensor.shape)
+print("Output size:", output_tensor.shape)
