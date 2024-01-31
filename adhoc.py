@@ -1,26 +1,29 @@
 import torch
 import torch.nn as nn
-from torchvision import models
 
-class UNetWithViT(nn.Module):
-    def __init__(self, in_channels, out_channels, vit_model='vit_base_patch16_224_in21k'):
-        super(UNetWithViT, self).__init__()
+class SegmentationModel(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(SegmentationModel, self).__init__()
 
-        # Use a Vision Transformer as the encoder
-        self.encoder = models.vit.__dict__[vit_model](pretrained=True, num_classes=0)  # num_classes=0 removes the classification head
+        # Encoder
+        self.encoder = nn.Sequential(
+            nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
 
         # Decoder
         self.decoder = nn.Sequential(
-            nn.Conv2d(768, 64, kernel_size=3, padding=1),
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(64, out_channels, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+            nn.Sigmoid()  # Using Sigmoid activation for binary segmentation
         )
 
     def forward(self, x):
-        # Use only the features from the vision transformer as input to the decoder
-        x = self.encoder(x)['last_hidden_state']
+        x = self.encoder(x)
         x = self.decoder(x)
         return x
 
@@ -28,5 +31,10 @@ class UNetWithViT(nn.Module):
 in_channels = 3  # Input channels (e.g., for RGB images)
 out_channels = 1  # Output channels for binary segmentation
 
-model = UNetWithViT(in_channels, out_channels)
+# Ensure the model can handle 512x512 images
+input_tensor = torch.randn((1, in_channels, 512, 512))
+model = SegmentationModel(in_channels, out_channels)
+output_tensor = model(input_tensor)
 
+print("Input size:", input_tensor.shape)
+print("Output size:", output_tensor.shape)
