@@ -1,68 +1,32 @@
 import torch
 import torch.nn as nn
+from torchvision import models
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=512):
-        super(PositionalEncoding, self).__init__()
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len).unsqueeze(1).float()
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe.unsqueeze(0))
+class UNetWithViT(nn.Module):
+    def __init__(self, in_channels, out_channels, vit_model='vit_base_patch16_224_in21k'):
+        super(UNetWithViT, self).__init__()
+
+        # Use a Vision Transformer as the encoder
+        self.encoder = models.vit.__dict__[vit_model](pretrained=True, num_classes=0)  # num_classes=0 removes the classification head
+
+        # Decoder
+        self.decoder = nn.Sequential(
+            nn.Conv2d(768, 64, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+        )
 
     def forward(self, x):
-        return x + self.pe[:, :x.size(1)].detach()
+        # Use only the features from the vision transformer as input to the decoder
+        x = self.encoder(x)['last_hidden_state']
+        x = self.decoder(x)
+        return x
 
-class TransformerEncoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers, num_heads):
-        super(TransformerEncoder, self).__init__()
-        self.embedding = nn.Embedding(input_dim, hidden_dim)
-        self.positional_encoding = PositionalEncoding(hidden_dim)
-        self.transformer_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(hidden_dim, num_heads),
-            num_layers
-        )
+# Instantiate the model
+in_channels = 3  # Input channels (e.g., for RGB images)
+out_channels = 1  # Output channels for binary segmentation
 
-    def forward(self, src):
-        src = self.embedding(src)
-        src = self.positional_encoding(src)
-        output = self.transformer_encoder(src)
-        return output
-
-class TransformerDecoder(nn.Module):
-    def __init__(self, output_dim, hidden_dim, num_layers, num_heads):
-        super(TransformerDecoder, self).__init__()
-        self.embedding = nn.Embedding(output_dim, hidden_dim)
-        self.positional_encoding = PositionalEncoding(hidden_dim)
-        self.transformer_decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(hidden_dim, num_heads),
-            num_layers
-        )
-
-    def forward(self, memory, tgt):
-        tgt = self.embedding(tgt)
-        tgt = self.positional_encoding(tgt)
-        output = self.transformer_decoder(tgt, memory)
-        return output
-
-class SegmentationModel(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim, num_layers, num_heads):
-        super(SegmentationModel, self).__init__()
-        self.encoder = TransformerEncoder(input_dim, hidden_dim, num_layers, num_heads)
-        self.decoder = TransformerDecoder(output_dim, hidden_dim, num_layers, num_heads)
-
-    def forward(self, src, tgt):
-        memory = self.encoder(src)
-        output = self.decoder(memory, tgt)
-        return output
-
-# Example usage:
-input_dim = 1000  # Input vocabulary size
-output_dim = 2    # Output vocabulary size (assuming binary segmentation mask)
-hidden_dim = 256  # Hidden dimension
-num_layers = 4    # Number of layers
-num_heads = 8     # Number of attention heads
-
-model = SegmentationModel(input_dim, output_dim, hidden_dim, num_layers, num_heads)
+model = UNetWithViT(in_channels, out_channels)
 
