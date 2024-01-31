@@ -13,12 +13,21 @@ class TransformerEncoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(d_model)
 
     def forward(self, src):
+        # Ensure the input is treated as a sequence (sequence length is the height x width)
+        b, c, h, w = src.shape
+        src = src.view(b, c, -1).permute(2, 0, 1)  # Reshape to sequence length, batch, channels
+
         src2 = self.self_attn(src, src, src)[0]
         src = src + self.dropout(src2)
         src = self.norm1(src)
+
         src2 = self.linear2(self.dropout(nn.functional.relu(self.linear1(src))))
         src = src + self.dropout(src2)
         src = self.norm2(src)
+
+        # Reshape back to original dimensions
+        src = src.permute(1, 2, 0).view(b, c, h, w)
+
         return src
 
 class SegmentationModelWithTransformer(nn.Module):
