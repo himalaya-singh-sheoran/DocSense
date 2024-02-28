@@ -1,15 +1,10 @@
 import cv2
 import numpy as np
-import random
 
-def degrade_image(image):
-    # Add noise
-    noise = np.random.normal(loc=0, scale=25, size=image.shape).astype(np.uint8)
-    noisy_image = cv2.add(image, noise)
-
+def degrade_image(image, quality=10):
     # Apply JPEG compression
-    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 10]  # Adjust the quality parameter as needed (0-100)
-    _, compressed_image = cv2.imencode('.jpg', noisy_image, encode_param)
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]  # Adjust the quality parameter as needed (0-100)
+    _, compressed_image = cv2.imencode('.jpg', image, encode_param)
     degraded_image = cv2.imdecode(compressed_image, 1)
 
     return degraded_image
