@@ -1,42 +1,34 @@
 import cv2
 import numpy as np
 
-def enhance_image(image):
-    # Convert to LAB color space
-    lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+def generate_text_mask(image):
+    # Convert the image to grayscale
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Split LAB channels
-    l, a, b = cv2.split(lab_image)
+    # Apply adaptive thresholding to obtain a binary image
+    _, binary_image = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-    # Apply contrast stretching
-    l_stretched = cv2.normalize(l, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
-    
-    # Apply histogram equalization
-    l_equalized = cv2.equalizeHist(l_stretched)
+    # Find contours of text regions
+    contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Apply adaptive histogram equalization
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-    l_clahe = clahe.apply(l_stretched)
+    # Create a mask for text regions
+    text_mask = np.zeros_like(binary_image)
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        cv2.rectangle(text_mask, (x, y), (x + w, y + h), (255, 255, 255), -1)
 
-    # Merge LAB channels
-    enhanced_lab_image = cv2.merge((l_clahe, a, b))
+    return text_mask
 
-    # Convert back to BGR color space
-    enhanced_image = cv2.cvtColor(enhanced_lab_image, cv2.COLOR_LAB2BGR)
+# Load the enhanced image
+enhanced_image = cv2.imread('enhanced_image.jpg')
 
-    return enhanced_image
+# Generate the mask for enhanced text regions
+text_mask = generate_text_mask(enhanced_image)
 
-# Load the image
-image = cv2.imread('input_image.jpg')
-
-# Enhance the image
-enhanced_image = enhance_image(image)
-
-# Display the result
-cv2.imshow('Original Image', image)
-cv2.imshow('Enhanced Image', enhanced_image)
+# Display the mask
+cv2.imshow('Text Mask', text_mask)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
 
-# Save the result
-cv2.imwrite('enhanced_image.jpg', enhanced_image)
+# Save the mask
+cv2.imwrite('text_mask.jpg', text_mask)
