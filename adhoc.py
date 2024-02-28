@@ -2,20 +2,29 @@ import cv2
 import numpy as np
 
 def enhance_image(image):
-    # Apply gamma correction
-    gamma = 1.5
-    corrected_image = np.uint8(cv2.pow(image / 255.0, gamma) * 255)
+    # Convert to LAB color space
+    lab_image = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
 
+    # Split LAB channels
+    l, a, b = cv2.split(lab_image)
+
+    # Apply contrast stretching
+    l_stretched = cv2.normalize(l, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+    
     # Apply histogram equalization
-    gray_image = cv2.cvtColor(corrected_image, cv2.COLOR_BGR2GRAY)
-    equalized_image = cv2.equalizeHist(gray_image)
-    equalized_image = cv2.cvtColor(equalized_image, cv2.COLOR_GRAY2BGR)
+    l_equalized = cv2.equalizeHist(l_stretched)
 
-    # Apply sharpening
-    kernel_sharpening = np.array([[-1,-1,-1], [-1, 9,-1], [-1,-1,-1]])
-    sharpened_image = cv2.filter2D(equalized_image, -1, kernel_sharpening)
+    # Apply adaptive histogram equalization
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    l_clahe = clahe.apply(l_stretched)
 
-    return sharpened_image
+    # Merge LAB channels
+    enhanced_lab_image = cv2.merge((l_clahe, a, b))
+
+    # Convert back to BGR color space
+    enhanced_image = cv2.cvtColor(enhanced_lab_image, cv2.COLOR_LAB2BGR)
+
+    return enhanced_image
 
 # Load the image
 image = cv2.imread('input_image.jpg')
