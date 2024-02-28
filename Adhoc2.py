@@ -1,72 +1,71 @@
-import torch
-import torch.nn as nn
+import cv2
+import numpy as np
+import random
 
-class TransformerEncoderLayer(nn.Module):
-    def __init__(self, d_model, nhead):
-        super(TransformerEncoderLayer, self).__init__()
-        self.self_attn = nn.MultiheadAttention(d_model, nhead)
-        self.norm1 = nn.LayerNorm(d_model)
-        self.feedforward = nn.Sequential(
-            nn.Linear(d_model, 4*d_model),
-            nn.ReLU(),
-            nn.Linear(4*d_model, d_model)
-        )
-        self.norm2 = nn.LayerNorm(d_model)
-        self.dropout = nn.Dropout(0.1)
+def replace_text_regions(image, text_regions):
+    # Load the OCR engine
+    ocr_engine = cv2.text.OCRTesseract_create()
 
-    def forward(self, src):
-        src2 = self.self_attn(src, src, src)[0]
-        src = src + self.dropout(src2)
-        src = self.norm1(src)
+    # Loop through detected text regions
+    for region in text_regions:
+        x, y, w, h = region
+        # Extract the text from the original image region
+        roi = image[y:y+h, x:x+w]
+        
+        # Apply pre-processing if needed (e.g., thresholding)
+        gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray_roi, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        
+        # Perform OCR on the region
+        _, text = ocr_engine.detectAndDecode(roi)
+        text = text.strip() if text is not None else ""
+        
+        # Get the color of the text region
+        text_color = image[y, x].tolist()
+        
+        # Generate new text with the same number of characters
+        new_text = ''.join(random.choices('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=len(text)))
+        
+        # Estimate font size to fit within the bounding box
+        font_scale = 1
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        thickness = 2
+        (text_width, text_height), baseline = cv2.getTextSize(new_text, font, font_scale, thickness)
+        while text_width > w or text_height > h:
+            font_scale -= 0.1
+            (text_width, text_height), _ = cv2.getTextSize(new_text, font, font_scale, thickness)
+        
+        # Overlay new text onto the image
+        color = text_color
+        text_x = x + (w - text_width) // 2
+        text_y = y + (h + text_height) // 2
+        cv2.putText(image, new_text, (text_x, text_y), font, font_scale, color, thickness, cv2.LINE_AA)
+    
+    return image
 
-        src2 = self.feedforward(src)
-        src = src + self.dropout(src2)
-        src = self.norm2(src)
+# Load the image
+image = cv2.imread('input_image.jpg')
 
-        return src
+# Convert image to grayscale
+gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-class DenoisingModel(nn.Module):
-    def __init__(self, in_channels, out_channels, transformer_layers=2, d_model=128, nhead=4):
-        super(DenoisingModel, self).__init__()
+# Initialize MSER detector
+mser = cv2.MSER_create()
 
-        # Transformer Encoder with additional convolutional layers
-        self.encoder = nn.Sequential(
-            nn.Conv2d(in_channels, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, d_model, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            TransformerEncoderLayer(d_model, nhead),
-        )
+# Detect text regions using MSER
+text_regions, _ = mser.detectRegions(gray)
 
-        # Decoder
-        self.decoder = nn.Sequential(
-            nn.Conv2d(d_model, 256, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, out_channels, kernel_size=3, padding=1),
-            nn.Sigmoid()  # Assuming the output is in the range [0, 1]
-        )
+# Convert text regions to bounding boxes
+text_regions = [cv2.boundingRect(region) for region in text_regions]
 
-    def forward(self, x):
-        x = self.encoder(x)
-        x = self.decoder(x)
-        return x
+# Replace detected text regions with dynamically generated new text
+image_with_new_text = replace_text_regions(image.copy(), text_regions)
 
-# Instantiate the model
-in_channels = 3  # Input channels (e.g., for RGB images)
-out_channels = 3  # Output channels for denoising (RGB)
+# Display the result
+cv2.imshow('Original Image', image)
+cv2.imshow('Image with Dynamically Generated New Text', image_with_new_text)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
 
-# Ensure the model can handle 256x256 images (adjust as needed)
-input_tensor = torch.randn((1, in_channels, 256, 256))
-model = DenoisingModel(in_channels, out_channels)
-output_tensor = model(input_tensor)
-
-print("Input size:", input_tensor.shape)
-print("Output size:", output_tensor.shape)
+# Save the result
+cv2.imwrite('image_with_dynamically_generated_new_text.jpg', image_with_new_text)
