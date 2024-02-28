@@ -12,10 +12,10 @@ def generate_text_mask(image):
     contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     # Create a mask for text regions
-    text_mask = np.zeros_like(binary_image)
+    text_mask = np.zeros_like(gray_image)
     for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
-        cv2.rectangle(text_mask, (x, y), (x + w, y + h), (255, 255, 255), -1)
+        cv2.drawContours(text_mask, [contour], 0, (255, 255, 255), -1)
 
     return text_mask
 
