@@ -1,38 +1,44 @@
 import cv2
 import numpy as np
 
-def generate_text_mask(image):
-    # Convert the image to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+def rotate_image(image, angle):
+    # Get image dimensions
+    height, width = image.shape[:2]
 
-    # Compute the mean intensity of the grayscale image
-    mean_intensity = np.mean(gray)
+    # Calculate the rotation matrix
+    rotation_matrix = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1)
 
-    # Thresholding method based on the intensity of the background
-    if mean_intensity < 127:  # Dark background
-        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    else:  # Light background
-        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Determine the new dimensions of the rotated image
+    cos_theta = np.abs(rotation_matrix[0, 0])
+    sin_theta = np.abs(rotation_matrix[0, 1])
+    new_width = int(height * sin_theta + width * cos_theta)
+    new_height = int(height * cos_theta + width * sin_theta)
 
-    # Apply morphological closing to fill small gaps in text regions
-    kernel = np.ones((3, 3), np.uint8)
-    closed_image = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+    # Adjust the rotation matrix for the padding
+    rotation_matrix[0, 2] += (new_width - width) / 2
+    rotation_matrix[1, 2] += (new_height - height) / 2
 
-    # Invert the resulting image to make the text regions black
-    final_text_mask = cv2.bitwise_not(closed_image)
+    # Pad the image to accommodate the rotated image
+    padded_image = cv2.copyMakeBorder(image, int((new_height - height) / 2), int((new_height - height) / 2),
+                                       int((new_width - width) / 2), int((new_width - width) / 2),
+                                       borderType=cv2.BORDER_CONSTANT, value=[0, 0, 0])
 
-    return final_text_mask
+    # Perform the rotation with bilinear interpolation
+    rotated_image = cv2.warpAffine(padded_image, rotation_matrix, (new_width, new_height), flags=cv2.INTER_LINEAR)
+
+    return rotated_image
 
 # Load the image
 image = cv2.imread('input_image.jpg')
 
-# Generate the mask for text regions
-text_mask = generate_text_mask(image)
+# Specify the rotation angle (clockwise)
+angle = 45
 
-# Display the mask
-cv2.imshow('Text Mask', text_mask)
+# Rotate the image
+rotated_image = rotate_image(image, angle)
+
+# Display the original and rotated images
+cv2.imshow('Original Image', image)
+cv2.imshow('Rotated Image', rotated_image)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
-
-# Save the mask
-cv2.imwrite('text_mask.jpg', text_mask)
