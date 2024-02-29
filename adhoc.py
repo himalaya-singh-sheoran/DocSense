@@ -5,8 +5,8 @@ def generate_text_mask(image):
     # Convert the image to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Apply adaptive thresholding to obtain a binary image
-    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 2)
+    # Apply adaptive thresholding using Gaussian weighted sum
+    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
 
     # Invert the binary image to ensure text regions are white
     inverted_binary = cv2.bitwise_not(binary)
