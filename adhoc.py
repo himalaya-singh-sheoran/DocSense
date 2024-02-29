@@ -1,50 +1,30 @@
 import cv2
 import numpy as np
-from sklearn.cluster import AgglomerativeClustering
 
-def extract_features(image):
+def generate_text_mask(image):
     # Convert the image to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Apply Canny edge detection to extract edge features
-    edges = cv2.Canny(gray, 100, 200)
+    # Apply adaptive thresholding to obtain a binary image
+    binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 2)
 
-    # Convert the edge image to binary
-    binary_edges = np.uint8(edges > 0)
+    # Invert the binary image to ensure text regions are white
+    inverted_binary = cv2.bitwise_not(binary)
 
-    # Reshape the binary edges into feature vectors
-    features = np.argwhere(binary_edges)
+    # Apply morphological closing to fill small gaps in text regions
+    kernel = np.ones((3, 3), np.uint8)
+    closed_image = cv2.morphologyEx(inverted_binary, cv2.MORPH_CLOSE, kernel, iterations=2)
 
-    return features
+    # Invert the resulting image again to make the text regions black
+    final_text_mask = cv2.bitwise_not(closed_image)
 
-def text_region_detection(image):
-    # Extract features from the image
-    features = extract_features(image)
-
-    # Perform Hierarchical Agglomerative Clustering
-    clustering = AgglomerativeClustering(n_clusters=None, distance_threshold=10, linkage='ward').fit(features)
-
-    # Filter out clusters representing text regions
-    text_regions = []
-    for cluster_label in np.unique(clustering.labels_):
-        cluster_points = features[clustering.labels_ == cluster_label]
-        # Filter clusters based on size, aspect ratio, etc.
-        if len(cluster_points) > 50:  # Adjust size threshold as needed
-            text_regions.append(cluster_points)
-
-    # Generate a mask for text regions
-    text_mask = np.zeros_like(image[:, :, 0], dtype=np.uint8)
-    for region in text_regions:
-        for point in region:
-            text_mask[point[0], point[1]] = 255
-
-    return text_mask
+    return final_text_mask
 
 # Load the image
 image = cv2.imread('input_image.jpg')
 
-# Detect text regions in the image
-text_mask = text_region_detection(image)
+# Generate the mask for text regions
+text_mask = generate_text_mask(image)
 
 # Display the mask
 cv2.imshow('Text Mask', text_mask)
