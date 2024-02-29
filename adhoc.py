@@ -8,20 +8,17 @@ def generate_text_mask(image):
     # Compute the mean intensity of the grayscale image
     mean_intensity = np.mean(gray)
 
-    # Use adaptive thresholding with appropriate flags based on mean intensity
-    if mean_intensity < 127:  # Use THRESH_BINARY_INV for darker text
-        binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 2)
-    else:  # Use THRESH_BINARY for lighter text
-        binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
-
-    # Invert the binary image to ensure text regions are white
-    inverted_binary = cv2.bitwise_not(binary)
+    # Thresholding method based on the intensity of the background
+    if mean_intensity < 127:  # Dark background
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    else:  # Light background
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
     # Apply morphological closing to fill small gaps in text regions
     kernel = np.ones((3, 3), np.uint8)
-    closed_image = cv2.morphologyEx(inverted_binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+    closed_image = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
 
-    # Invert the resulting image again to make the text regions black
+    # Invert the resulting image to make the text regions black
     final_text_mask = cv2.bitwise_not(closed_image)
 
     return final_text_mask
