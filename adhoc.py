@@ -7,21 +7,26 @@ image = cv2.imread('input_image.jpg')
 # Convert the image to grayscale
 gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-# Apply Canny edge detection
-edges = cv2.Canny(gray, 50, 150)
+# Apply adaptive thresholding to binarize the image
+binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 10)
 
-# Perform morphological closing to fill in small gaps
-kernel = np.ones((5, 5), np.uint8)
-closed_edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+# Create horizontal and vertical structuring elements
+horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 5))
+vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 1))
 
-# Invert the closed edges to create a mask
-mask = 255 - closed_edges
+# Perform morphological operations to detect and remove horizontal lines
+horizontal_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
+cleaned_image = cv2.subtract(binary, horizontal_lines)
 
-# Apply the mask to the original image to remove the table boundaries
-result = cv2.bitwise_and(image, image, mask=mask)
+# Perform morphological operations to detect and remove vertical lines
+vertical_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
+cleaned_image = cv2.subtract(cleaned_image, vertical_lines)
+
+# Invert the result
+cleaned_image = 255 - cleaned_image
 
 # Display the original and processed images
 cv2.imshow('Original Image', image)
-cv2.imshow('Result', result)
+cv2.imshow('Result', cleaned_image)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
