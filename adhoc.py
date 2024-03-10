@@ -1,32 +1,31 @@
 import cv2
 import numpy as np
+import random
 
-# Read the input image
-image = cv2.imread('input_image.jpg')
+# List of system font names
+font_names = [
+    "Arial",
+    "Times New Roman",
+    "Courier New",
+    "Verdana",
+    "Tahoma",
+    "Calibri",
+    "Georgia",
+    "Comic Sans MS",
+    "Impact",
+    "Trebuchet MS"
+]
 
-# Convert the image to grayscale
-gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+# Load an image
+image = np.zeros((300, 500, 3), dtype=np.uint8)
 
-# Apply adaptive thresholding to binarize the image
-binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 10)
+# Randomly choose a font name
+selected_font = random.choice(font_names)
 
-# Create horizontal and vertical structuring elements
-horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 5))
-vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 1))
+# Render text using the selected font
+cv2.putText(image, 'Hello, OpenCV!', (50, 100), selected_font, 1, (255, 255, 255), 2)
 
-# Perform morphological operations to detect and remove horizontal lines
-horizontal_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, horizontal_kernel, iterations=2)
-cleaned_image = cv2.subtract(binary, horizontal_lines)
-
-# Perform morphological operations to detect and remove vertical lines
-vertical_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, vertical_kernel, iterations=2)
-cleaned_image = cv2.subtract(cleaned_image, vertical_lines)
-
-# Invert the result
-cleaned_image = 255 - cleaned_image
-
-# Display the original and processed images
-cv2.imshow('Original Image', image)
-cv2.imshow('Result', cleaned_image)
+# Display the image with text
+cv2.imshow('Image with Text', image)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
