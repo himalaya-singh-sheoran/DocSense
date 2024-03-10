@@ -1,29 +1,26 @@
-from PIL import ImageFont, ImageDraw, Image
 import cv2
 import numpy as np
 
-# Load an image
-image = np.zeros((300, 500, 3), dtype=np.uint8)
+# Read the input image
+image = cv2.imread('input_image.jpg')
 
-# Convert the image to RGB (OpenCV uses BGR by default)
-image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+# Read the mask (binary image)
+mask = cv2.imread('mask_image.jpg', cv2.IMREAD_GRAYSCALE)
 
-# Create a PIL Image from the RGB image array
-pil_image = Image.fromarray(image_rgb)
+# Apply the mask to extract the region of interest
+masked_image = cv2.bitwise_and(image, image, mask=mask)
 
-# Choose a font (Arial, size 40)
-font = ImageFont.truetype("Arial.ttf", 40)
+# Convert the masked image to a list of RGB values
+pixels = masked_image.reshape((-1, 3))
+pixels = pixels[mask.flatten() > 0]
 
-# Create a PIL ImageDraw object
-draw = ImageDraw.Draw(pil_image)
+# Calculate the histogram of colors in the masked region
+histogram = cv2.calcHist([pixels], [0, 1, 2], None, [256, 256, 256], [0, 256, 0, 256, 0, 256])
 
-# Draw text on the image
-draw.text((50, 100), "Hello, OpenCV!", font=font, fill=(255, 255, 255))
+# Find the index of the most frequent color in the histogram
+most_frequent_color_index = np.unravel_index(np.argmax(histogram), histogram.shape)
 
-# Convert the PIL Image back to an OpenCV image array
-image_with_text = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+# Convert the index to BGR color format
+most_frequent_color_bgr = np.array(most_frequent_color_index[::-1], dtype=np.uint8)
 
-# Display the image with text
-cv2.imshow("Image with Text", image_with_text)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+print("Most frequent color (BGR):", most_frequent_color_bgr)
