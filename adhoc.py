@@ -1,36 +1,54 @@
-from msal import ConfidentialClientApplication
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
-# Azure AD app configurations
+# Azure AD app details
 client_id = 'your_client_id'
 client_secret = 'your_client_secret'
 tenant_id = 'your_tenant_id'
-scope = ["https://graph.microsoft.com/.default"]
+resource = 'https://<your_domain>.sharepoint.com'
 
-# SharePoint API endpoint
-site_url = 'https://yourdomain.sharepoint.com/sites/yoursite'
-list_name = 'your_list_name'
-endpoint = f"{site_url}/_api/web/lists/getbytitle('{list_name}')/items"
+# SharePoint site details
+site_url = 'https://<your_domain>.sharepoint.com/sites/<site_name>'
+list_name = 'YourListName'
 
-# Initialize MSAL app
-app = ConfidentialClientApplication(
-    client_id, authority=f"https://login.microsoftonline.com/{tenant_id}",
-    client_credential=client_secret
-)
-
-# Get access token
-result = app.acquire_token_for_client(scopes=scope)
-access_token = result['access_token']
-
-# Make request to SharePoint API
-headers = {
-    'Authorization': 'Bearer ' + access_token,
-    'Content-Type': 'application/json'
+# Get OAuth2 token
+token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/token"
+payload = {
+    'grant_type': 'client_credentials',
+    'client_id': client_id,
+    'client_secret': client_secret,
+    'resource': resource
 }
-response = requests.get(endpoint, headers=headers)
+response = requests.post(token_url, data=payload)
+access_token = response.json()['access_token']
 
+# Retry mechanism for HTTP requests
+retry_strategy = Retry(
+    total=3,
+    status_forcelist=[429, 500, 502, 503, 504],
+    method_whitelist=["GET"],
+    backoff_factor=1
+)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+http = requests.Session()
+http.mount("https://", adapter)
+
+# SharePoint API endpoint for lists
+list_endpoint = f"{site_url}/_api/web/lists/getbytitle('{list_name}')/items"
+
+# Make a GET request to retrieve items from the SharePoint list
+headers = {
+    'Authorization': f'Bearer {access_token}',
+    'Accept': 'application/json;odata=verbose'
+}
+response = http.get(list_endpoint, headers=headers)
+
+# Process the response
 if response.status_code == 200:
     data = response.json()
-    print(data)  # Handle SharePoint data here
+    items = data['d']['results']
+    for item in items:
+        print(item['Title'])  # Adjust the field name as per your SharePoint list schema
 else:
-    print("Error:", response.status_code, response.text)
+    print("Failed to retrieve items. Status code:", response.status_code)
