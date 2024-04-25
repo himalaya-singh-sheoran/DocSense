@@ -1,27 +1,44 @@
-from shareplum import Site
-from shareplum import Office365
-from requests_ntlm import HttpNtlmAuth
+import requests
 
-# SharePoint site URL
-site_url = "https://yourcompany.sharepoint.com/sites/yoursite"
+# Azure AD app details
+client_id = 'your_client_id'
+client_secret = 'your_client_secret'
+tenant_id = 'your_tenant_id'
+resource = 'https://<your_domain>.sharepoint.com'
 
-# SharePoint client ID and client secret
-client_id = "your_client_id"
-client_secret = "your_client_secret"
+# SharePoint site details
+site_url = 'https://<your_domain>.sharepoint.com/sites/<site_name>'
+list_name = 'YourListName'
 
-# Connect to SharePoint site using client credentials
-authcookie = Office365(site_url, client_id=client_id, client_secret=client_secret).GetCookies()
+# Get OAuth2 token
+token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/token"
+payload = {
+    'grant_type': 'client_credentials',
+    'client_id': client_id,
+    'client_secret': client_secret,
+    'resource': resource
+}
+response = requests.post(token_url, data=payload)
+access_token = response.json().get('access_token')
 
-# Connect to SharePoint site using the authentication cookie
-site = Site(site_url, auth=authcookie)
+if access_token:
+    # SharePoint API endpoint for lists
+    list_endpoint = f"{site_url}/_api/web/lists/getbytitle('{list_name}')/items"
 
-# Get a SharePoint list by title
-list_name = "YourListName"
-sp_list = site.List(list_name)
+    # Make a GET request to retrieve items from the SharePoint list
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Accept': 'application/json;odata=verbose'
+    }
+    response = requests.get(list_endpoint, headers=headers)
 
-# Get all items from the list
-items = sp_list.GetListItems()
-
-# Print item titles
-for item in items:
-    print(item["Title"])
+    # Process the response
+    if response.status_code == 200:
+        data = response.json()
+        items = data.get('d', {}).get('results', [])
+        for item in items:
+            print(item.get('Title'))  # Adjust the field name as per your SharePoint list schema
+    else:
+        print("Failed to retrieve items. Status code:", response.status_code)
+else:
+    print("Failed to obtain access token.")
