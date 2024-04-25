@@ -1,54 +1,27 @@
-import requests
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
+from shareplum import Site
+from shareplum import Office365
+from requests_ntlm import HttpNtlmAuth
 
-# Azure AD app details
-client_id = 'your_client_id'
-client_secret = 'your_client_secret'
-tenant_id = 'your_tenant_id'
-resource = 'https://<your_domain>.sharepoint.com'
+# SharePoint site URL
+site_url = "https://yourcompany.sharepoint.com/sites/yoursite"
 
-# SharePoint site details
-site_url = 'https://<your_domain>.sharepoint.com/sites/<site_name>'
-list_name = 'YourListName'
+# SharePoint client ID and client secret
+client_id = "your_client_id"
+client_secret = "your_client_secret"
 
-# Get OAuth2 token
-token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/token"
-payload = {
-    'grant_type': 'client_credentials',
-    'client_id': client_id,
-    'client_secret': client_secret,
-    'resource': resource
-}
-response = requests.post(token_url, data=payload)
-access_token = response.json()['access_token']
+# Connect to SharePoint site using client credentials
+authcookie = Office365(site_url, client_id=client_id, client_secret=client_secret).GetCookies()
 
-# Retry mechanism for HTTP requests
-retry_strategy = Retry(
-    total=3,
-    status_forcelist=[429, 500, 502, 503, 504],
-    method_whitelist=["GET"],
-    backoff_factor=1
-)
-adapter = HTTPAdapter(max_retries=retry_strategy)
-http = requests.Session()
-http.mount("https://", adapter)
+# Connect to SharePoint site using the authentication cookie
+site = Site(site_url, auth=authcookie)
 
-# SharePoint API endpoint for lists
-list_endpoint = f"{site_url}/_api/web/lists/getbytitle('{list_name}')/items"
+# Get a SharePoint list by title
+list_name = "YourListName"
+sp_list = site.List(list_name)
 
-# Make a GET request to retrieve items from the SharePoint list
-headers = {
-    'Authorization': f'Bearer {access_token}',
-    'Accept': 'application/json;odata=verbose'
-}
-response = http.get(list_endpoint, headers=headers)
+# Get all items from the list
+items = sp_list.GetListItems()
 
-# Process the response
-if response.status_code == 200:
-    data = response.json()
-    items = data['d']['results']
-    for item in items:
-        print(item['Title'])  # Adjust the field name as per your SharePoint list schema
-else:
-    print("Failed to retrieve items. Status code:", response.status_code)
+# Print item titles
+for item in items:
+    print(item["Title"])
