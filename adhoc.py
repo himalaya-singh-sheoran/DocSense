@@ -132,6 +132,7 @@ class TestSharePointDataloaderApi(unittest.TestCase):
         mock_response.status_code = 404
         mock_response.json.return_value = {'error': 'List not found'}
         mock_get.return_value = mock_response
+    
 
         # Mocking the access token returned by connector
         mock_connector.return_value.get_access_token.return_value = "test_token"
@@ -156,6 +157,34 @@ class TestSharePointDataloaderApi(unittest.TestCase):
             data_generator = self.sharepoint_api.yield_data_from_sharepoint_list("TestList", 3)
             next(data_generator)
         self.assertEqual(str(context.exception), "Error in class SharePointDataloaderApi in function yield_data_from_sharepoint_list: <class 'Exception'>")
+
+     @patch.object(SharePointDataloaderApi, 'yield_data_from_sharepoint_list', return_value=[[1, 2, 3]])
+    def test_yield_source_data_sharepoint_list_success(self, mock_yield_data):
+        # Test the function with source_info for a SharePoint list
+        source_info = {"source_type": "sharepoint_list", "source_path": "TestList"}
+        batch_size = 3
+        data_generator = self.sharepoint_api.yeild_source_data(source_info, batch_size)
+        data = [item for sublist in data_generator for item in sublist]
+        self.assertEqual(data, [1, 2, 3])
+
+    @patch.object(SharePointDataloaderApi, 'yield_data_from_sharepoint_list', side_effect=Exception("Failed to yield data"))
+    def test_yield_source_data_sharepoint_list_failure(self, mock_yield_data):
+        # Test the function with source_info for a SharePoint list
+        source_info = {"source_type": "sharepoint_list", "source_path": "NonExistentList"}
+        batch_size = 3
+        with self.assertRaises(Exception) as context:
+            data_generator = self.sharepoint_api.yeild_source_data(source_info, batch_size)
+            next(data_generator)
+        self.assertEqual(str(context.exception), "Error when yieldind data from sharepoint dataloader: Exception Failed to yield data)")
+
+    def test_yield_source_data_invalid_source_type(self):
+        # Test the function with an invalid source type
+        source_info = {"source_type": "invalid_type", "source_path": "TestPath"}
+        batch_size = 3
+        with self.assertRaises(Exception) as context:
+            self.sharepoint_api.yeild_source_data(source_info, batch_size)
+        self.assertEqual(str(context.exception), "Error when yieldind data from sharepoint dataloader: AttributeError 'SharePointDataloaderApi' object has no attribute 'yield_data_from_invalid_type'")
+
 
 if __name__ == '__main__':
     unittest.main()
