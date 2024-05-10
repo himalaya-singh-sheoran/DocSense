@@ -67,3 +67,16 @@ class TestSharePointDataloader(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
     
+
+@patch('app.connectors.sharepoint.connector.SharePointConnector')
+    def test_download_xlxs_files_success(self, mock_sharepoint_connector):
+        # Test successful download of xlsx file
+        mock_establish_sharepoint_context = MagicMock()
+        mock_establish_sharepoint_context.return_value.web.get_file_by_server_relative_url.return_value.download_session.return_value.execute_query.return_value = None
+        mock_sharepoint_connector.return_value.establish_sharepoint_context = mock_establish_sharepoint_context
+        
+        sharepoint_dataloader = SharePointDataloader(connector_name="sharepoint", connector_configs="TEST_CONFIG")
+        sharepoint_dataloader.download_xlxs_files("file_relative_url")
+        
+        mock_establish_sharepoint_context.assert_called_once()
+
