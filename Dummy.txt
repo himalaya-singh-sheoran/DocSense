@@ -1,0 +1,10 @@
+Metadata-Driven Python-Based Data Loader Component
+
+Objective:
+To optimize our data processing workflow by reducing reliance on SSIS packages, minimizing development effort, and accelerating turnaround times.
+
+Key Benefits:
+
+Decreased Dependence on SSIS: Replaces traditional SSIS packages with a more versatile and powerful Python-based solution.
+Simplified Development: Reduces the complexity and time required for developing data loading processes.
+Enhanced Efficiency: Significantly improves turnaround times, enabling faster deployment and updates.
