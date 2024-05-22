@@ -8,3 +8,6 @@ Key Benefits:
 Decreased Dependence on SSIS: Replaces traditional SSIS packages with a more versatile and powerful Python-based solution.
 Simplified Development: Reduces the complexity and time required for developing data loading processes.
 Enhanced Efficiency: Significantly improves turnaround times, enabling faster deployment and updates.
+
+Problem Statement: 
+Traditional data loading methods utilizing SSIS packages are resource-intensive, time-consuming, and inflexible. Our objective is to introduce a metadata-driven Python-based data loader component to alleviate these challenges by reducing dependency on SSIS, minimizing development efforts, and accelerating turnaround time for data loading processes.
