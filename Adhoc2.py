@@ -1,120 +1,71 @@
-import cv2
-import numpy as np
-import random
+import heapq
+from datetime import datetime, timedelta
 
-def replace_text_regions(image, text_regions):
-    # Load the pre-trained EAST text detector
-    net = cv2.dnn.readNet("frozen_east_text_detection.pb")
+class Job:
+    def __init__(self, id, start_time, min_time, avg_time, max_time):
+        self.id = id
+        self.start_time = start_time
+        self.min_time = min_time
+        self.avg_time = avg_time
+        self.max_time = max_time
+        self.remaining_time = max_time
 
-    # Specify the output layers
-    layer_names = ["feature_fusion/Conv_7/Sigmoid", "feature_fusion/concat_3"]
+    def __lt__(self, other):
+        return self.remaining_time < other.remaining_time
 
-    # Loop through detected text regions
-    for region in text_regions:
-        x, y, w, h = region
-        # Extract the text from the original image region
-        roi = image[y:y+h, x:x+w]
+def optimized_schedule_jobs(jobs, start_of_day, end_of_day):
+    # Convert string times to datetime objects
+    for job in jobs:
+        job.start_time = datetime.strptime(job.start_time, "%H:%M")
+    
+    # Initialize the priority queue
+    job_queue = []
+    heapq.heapify(job_queue)
+    
+    current_time = start_of_day
+    scheduled_jobs = []
+    
+    while current_time < end_of_day:
+        # Add jobs that are ready to start to the priority queue
+        for job in jobs:
+            if job.start_time == current_time:
+                heapq.heappush(job_queue, job)
+        
+        # Dynamic prioritization: prioritize jobs that can be completed within the remaining time
+        if job_queue:
+            # Sort jobs in the queue based on their remaining time and urgency
+            job_queue.sort(key=lambda job: (job.remaining_time, (end_of_day - current_time).total_seconds() / 60 - job.remaining_time))
+            
+            # Execute the job with the highest priority
+            current_job = heapq.heappop(job_queue)
+            if current_time + timedelta(minutes=current_job.remaining_time) <= end_of_day:
+                # Job can be completed today
+                current_time += timedelta(minutes=current_job.remaining_time)
+                scheduled_jobs.append(current_job.id)
+            else:
+                # Job can't be completed today, update remaining time and reschedule
+                current_job.remaining_time -= (end_of_day - current_time).total_seconds() / 60
+                current_time = end_of_day
+                heapq.heappush(job_queue, current_job)
+        else:
+            # No jobs ready to run, move to the next minute
+            current_time += timedelta(minutes=1)
+    
+    return scheduled_jobs
 
-        # Resize region to a fixed size (320x320) required by EAST text detector
-        blob = cv2.dnn.blobFromImage(roi, 1.0, (320, 320), (123.68, 116.78, 103.94), swapRB=True, crop=False)
+# Example usage
+jobs = [
+    Job(1, "09:00", 10, 15, 20),
+    Job(2, "10:00", 5, 10, 15),
+    Job(3, "11:00", 20, 25, 30),
+    Job(4, "09:30", 10, 12, 15),
+    Job(5, "10:15", 5, 7, 10)
+]
 
-        # Forward pass through the network to get the text detection scores and geometry
-        net.setInput(blob)
-        scores, geometry = net.forward(layer_names)
+start_of_day = datetime.strptime("09:00", "%H:%M")
+end_of_day = datetime.strptime("17:00", "%H:%M")
 
-        # Decode the text regions from the scores and geometry
-        rects, confidences = decode_predictions(scores, geometry)
+scheduled_jobs = optimized_schedule_jobs(jobs, start_of_day, end_of_day)
+print("Scheduled Jobs:", scheduled_jobs)
 
-        # Loop through the detected text regions
-        for rect, confidence in zip(rects, confidences):
-            x1, y1, x2, y2 = rect
-            text = "New Text"  # Replace with the desired new text
 
-            # Get the color of the text region
-            text_color = image[y, x].tolist()
-
-            # Overlay new text onto the image
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 1
-            color = text_color
-            thickness = 2
-            (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
-            text_x = x + (x2 - x1 - text_width) // 2
-            text_y = y + (y2 - y1 + text_height) // 2
-            cv2.putText(image, text, (text_x, text_y), font, font_scale, color, thickness, cv2.LINE_AA)
-
-    return image
-
-def decode_predictions(scores, geometry):
-    # Extract the number of rows and columns from the scores
-    num_rows, num_cols = scores.shape[2:4]
-    rects = []
-    confidences = []
-
-    # Loop over the number of rows
-    for y in range(0, num_rows):
-        # Extract the scores (probabilities) and geometrical data (bounding box) for each row
-        scores_data = scores[0, 0, y]
-        x_data0 = geometry[0, 0, y]
-        x_data1 = geometry[0, 1, y]
-        x_data2 = geometry[0, 2, y]
-        x_data3 = geometry[0, 3, y]
-        angles_data = geometry[0, 4, y]
-
-        # Loop over the number of columns
-        for x in range(0, num_cols):
-            # If the score is not sufficiently high, skip this region
-            if scores_data[x] < 0.5:
-                continue
-
-            # Calculate the offset factor as some of the geometry data is offset
-            offset_factor_x = x * 4.0
-            offset_factor_y = y * 4.0
-
-            # Extract the angle for this region and calculate its sine and cosine
-            angle = angles_data[x]
-            sin_angle = np.sin(angle)
-            cos_angle = np.cos(angle)
-
-            # Calculate the bounding box offsets
-            offset_x = x_data0[x] + x_data2[x]
-            offset_y = x_data1[x] + x_data3[x]
-
-            # Calculate the bounding box coordinates
-            x1 = int(offset_factor_x + (cos_angle * x_data0[x]) + (sin_angle * x_data2[x]))
-            y1 = int(offset_factor_y - (sin_angle * x_data0[x]) + (cos_angle * x_data2[x]))
-            x2 = int(offset_factor_x + (cos_angle * x_data1[x]) + (sin_angle * x_data3[x]))
-            y2 = int(offset_factor_y - (sin_angle * x_data1[x]) + (cos_angle * x_data3[x]))
-
-            # Append the bounding box coordinates and confidence to the respective lists
-            rects.append((x1, y1, x2, y2))
-            confidences.append(scores_data[x])
-
-    return rects, confidences
-
-# Load the image
-image = cv2.imread('input_image.jpg')
-
-# Convert image to grayscale
-gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-# Initialize MSER detector
-mser = cv2.MSER_create()
-
-# Detect text regions using MSER
-text_regions, _ = mser.detectRegions(gray)
-
-# Convert text regions to bounding boxes
-text_regions = [cv2.boundingRect(region) for region in text_regions]
-
-# Replace detected text regions with dynamically generated new text
-image_with_new_text = replace_text_regions(image.copy(), text_regions)
-
-# Display the result
-cv2.imshow('Original Image', image)
-cv2.imshow('Image with Dynamically Generated New Text', image_with_new_text)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-
-# Save the result
-cv2.imwrite('image_with_dynamically_generated_new_text.jpg', image_with_new_text)
