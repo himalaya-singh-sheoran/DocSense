@@ -16,7 +16,7 @@ color_dict = {
 input_values = ["red", "amber", "green", "red", "green"]
 
 # Use the Unicode character for a dot and set the font
-dot_char = "●"  # Unicode character for a large dot
+dot_char = "⬤"  # Unicode character for a large dot
 font = Font(name='Calibri', size=20)  # Adjust size as needed
 
 # Write input values as dots in cells and apply corresponding color fill
