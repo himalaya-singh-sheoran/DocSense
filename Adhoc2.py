@@ -2,12 +2,24 @@ import threading
 import time
 import heapq
 
+
 class JobExecutor:
     def __init__(self, max_threads=5):
         self.job_queue = []  # Priority queue for jobs
         self.lock = threading.Lock()  # Lock for thread-safe access
         self.max_threads = max_threads  # Maximum concurrent threads
         self.active_threads = 0  # Count of active threads
+        self.executor_thread = threading.Thread(target=self._job_worker, daemon=True)
+        self.running = True  # To control the executor's lifecycle
+
+    def start(self):
+        """Start the job executor thread."""
+        self.executor_thread.start()
+
+    def stop(self):
+        """Stop the job executor thread."""
+        self.running = False
+        self.executor_thread.join()
 
     def add_job(self, job_id, priority, job_func, *args, **kwargs):
         """
@@ -22,11 +34,11 @@ class JobExecutor:
             heapq.heappush(self.job_queue, (priority, job_id, job_func, args, kwargs))
             print(f"Job {job_id} added with priority {priority}.")
 
-    def execute_jobs(self):
+    def _job_worker(self):
         """
-        Execute jobs based on their priority. At most, `max_threads` jobs are executed concurrently.
+        Continuously monitor and execute jobs from the queue.
         """
-        while True:
+        while self.running:
             with self.lock:
                 if self.active_threads < self.max_threads and self.job_queue:
                     # Fetch the highest priority job
@@ -36,12 +48,8 @@ class JobExecutor:
 
                     # Start a thread to execute the job
                     threading.Thread(target=self._execute_job, args=(job_id, job_func, *args), kwargs=kwargs).start()
-                elif not self.job_queue and self.active_threads == 0:
-                    # Exit when all jobs are completed
-                    print("All jobs completed.")
-                    break
 
-            time.sleep(1)  # Prevent busy waiting
+            time.sleep(0.5)  # Short sleep to avoid busy waiting
 
     def _execute_job(self, job_id, job_func, *args, **kwargs):
         """
@@ -55,25 +63,4 @@ class JobExecutor:
         finally:
             with self.lock:
                 self.active_threads -= 1
-
-
-# Example usage
-if __name__ == "__main__":
-    # Define a sample job function
-    def sample_job(job_id, duration):
-        print(f"Executing job {job_id} for {duration} seconds.")
-        time.sleep(duration)
-
-    # Initialize the JobExecutor
-    executor = JobExecutor(max_threads=5)
-
-    # Add jobs with varying priorities and durations
-    executor.add_job("job1", priority=3, job_func=sample_job, job_id="job1", duration=5)
-    executor.add_job("job2", priority=1, job_func=sample_job, job_id="job2", duration=3)
-    executor.add_job("job3", priority=2, job_func=sample_job, job_id="job3", duration=4)
-    executor.add_job("job4", priority=5, job_func=sample_job, job_id="job4", duration=2)
-    executor.add_job("job5", priority=4, job_func=sample_job, job_id="job5", duration=6)
-    executor.add_job("job6", priority=0, job_func=sample_job, job_id="job6", duration=1)
-
-    # Start executing jobs
-    executor.execute_jobs()
+                
