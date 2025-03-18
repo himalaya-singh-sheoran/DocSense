@@ -60,20 +60,29 @@ class DataFrameInsightGenerator:
                 stats = self.df[col].describe()
                 summary.append(
                     f"- {col}: "
-                    f"Average {stats['mean']:.1f}, "
-                    f"ranges from {stats['min']:.1f} to {stats['max']:.1f}"
+                    f"Average {stats.get('mean', 'N/A'):.1f}, "
+                    f"ranges from {stats.get('min', 'N/A'):.1f} to {stats.get('max', 'N/A'):.1f}"
                 )
         
         # Categorical columns summary
         if self.column_types['categorical']:
             summary.append("\nCategory Analysis:")
             for col in self.column_types['categorical']:
-                top_value = self.df[col].mode()[0]
-                top_percent = (self.df[col].value_counts().max() / len(self.df)) * 100
-                summary.append(
-                    f"- {col}: "
-                    f"Most common value '{top_value}' ({top_percent:.1f}% of records)"
-                )
+                try:
+                    mode_data = self.df[col].mode()
+                    if not mode_data.empty:
+                        top_value = mode_data.iloc[0]
+                        top_count = self.df[col].value_counts().iloc[0]
+                        top_percent = (top_count / len(self.df)) * 100
+                        summary.append(
+                            f"- {col}: "
+                            f"Most common value '{top_value}' ({top_percent:.1f}% of records)"
+                        )
+                    else:
+                        summary.append(f"- {col}: No dominant values (all unique)")
+                except Exception as e:
+                    summary.append(f"- {col}: Could not analyze values")
+        
         
         # Datetime columns summary
         if self.column_types['datetime']:
