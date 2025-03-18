@@ -1,172 +1,134 @@
 import pandas as pd
 import numpy as np
+from datetime import datetime
 
-class ExecutiveSummaryGenerator:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self.df = self.load_data()
-        self.basic_summary = self.generate_basic_summary()
-        self.insights = self.analyze_managerial_insights()
+class DataFrameInsightGenerator:
+    def __init__(self, dataframe):
+        self.df = dataframe
+        self.column_types = self._identify_column_types()
+        self.summary = self._generate_summary()
+        self.insights = self._generate_insights()
 
-    def load_data(self):
-        """Load CSV or Excel files based on the file extension."""
-        if self.file_path.endswith(".csv"):
-            df = pd.read_csv(self.file_path)
-        elif self.file_path.endswith(".xlsx"):
-            df = pd.read_excel(self.file_path)
-        else:
-            raise ValueError("Unsupported file format. Please use CSV or Excel.")
-        return df
-
-    def generate_basic_summary(self):
-        """Generate basic statistics of the dataset."""
-        df = self.df
-        summary = {
-            "Total Records": df.shape[0],
-            "Total Attributes": df.shape[1],
-            "Total Missing Values": df.isnull().sum().sum(),
-            "Duplicate Records": df.duplicated().sum(),
+    def _identify_column_types(self):
+        """Classify columns into numeric, categorical, and datetime"""
+        column_types = {
+            'numeric': [],
+            'categorical': [],
+            'datetime': []
         }
-        return summary
-
-    def analyze_managerial_insights(self):
-        """
-        Extract plain-language insights for higher management,
-        including overall averages, group comparisons, data quality, and time series trends.
-        """
-        df = self.df.copy()  # Work on a copy
-        insights = {}
-
-        # Identify numeric and categorical columns
-        num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        cat_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
-
-        # Identify datetime columns: either already datetime or convertible
-        dt_cols = []
-        for col in df.columns:
-            if np.issubdtype(df[col].dtype, np.datetime64):
-                dt_cols.append(col)
-            else:
+        
+        for col in self.df.columns:
+            if np.issubdtype(self.df[col].dtype, np.number):
+                column_types['numeric'].append(col)
+            elif self.df[col].dtype == 'object':
                 try:
-                    converted = pd.to_datetime(df[col], errors='raise')
-                    if converted.notnull().mean() > 0.8:  # At least 80% conversion success
-                        df[col] = converted
-                        dt_cols.append(col)
-                except Exception:
-                    continue
+                    self.df[col] = pd.to_datetime(self.df[col])
+                    column_types['datetime'].append(col)
+                except:
+                    column_types['categorical'].append(col)
+            else:
+                column_types['categorical'].append(col)
+                
+        return column_types
 
-        # 1. Overall Numeric Metrics (skip datetime columns)
-        for col in num_cols:
-            # Skip if this column is also datetime
-            if col in dt_cols:
-                continue
-            overall_avg = np.round(df[col].mean(), 2)
-            insights[f"Overall average {col}"] = f"The overall average {col} is {overall_avg}."
-
-        # 2. Group Comparisons: Relationship between categorical and numeric data
-        for cat in cat_cols:
-            if df[cat].nunique() <= 1:
-                continue
-            for num in num_cols:
-                if num in dt_cols:
-                    continue
-                grouped = df.groupby(cat)[num].mean()
-                if grouped.empty or grouped.nunique() == 1:
-                    continue
-                best_group = grouped.idxmax()
-                best_value = np.round(grouped.max(), 2)
-                worst_group = grouped.idxmin()
-                worst_value = np.round(grouped.min(), 2)
-                overall = np.round(df[num].mean(), 2)
-                insight_text = (
-                    f"For {num}, the overall average is {overall}. The group '{best_group}' has the highest average at {best_value}, "
-                    f"while the group '{worst_group}' has the lowest at {worst_value}."
+    def _generate_summary(self):
+        """Generate basic summary statistics"""
+        summary = []
+        
+        # Dataset overview
+        summary.append(f"Dataset contains {len(self.df)} records with {len(self.df.columns)} columns")
+        
+        # Numeric columns summary
+        if self.column_types['numeric']:
+            summary.append("\nNumerical Values Analysis:")
+            for col in self.column_types['numeric']:
+                stats = self.df[col].describe()
+                summary.append(
+                    f"- {col}: "
+                    f"Average {stats['mean']:.1f}, "
+                    f"ranges from {stats['min']:.1f} to {stats['max']:.1f}"
                 )
-                insights[f"{num} by {cat}"] = insight_text
+        
+        # Categorical columns summary
+        if self.column_types['categorical']:
+            summary.append("\nCategory Analysis:")
+            for col in self.column_types['categorical']:
+                top_value = self.df[col].mode()[0]
+                top_percent = (self.df[col].value_counts().max() / len(self.df)) * 100
+                summary.append(
+                    f"- {col}: "
+                    f"Most common value '{top_value}' ({top_percent:.1f}% of records)"
+                )
+        
+        # Datetime columns summary
+        if self.column_types['datetime']:
+            summary.append("\nDate Analysis:")
+            for col in self.column_types['datetime']:
+                date_range = f"{self.df[col].min().strftime('%Y-%m-%d')} to {self.df[col].max().strftime('%Y-%m-%d')}"
+                summary.append(f"- {col} ranges from {date_range}")
+        
+        return "\n".join(summary)
 
-        # 3. Data Completeness: Flag columns with high missing data (> 20%)
-        missing_details = {}
-        for col in df.columns:
-            missing_pct = np.round(df[col].isnull().mean() * 100, 2)
-            if missing_pct > 20:
-                missing_details[col] = f"{missing_pct}% missing"
-        if missing_details:
-            insights["Data Completeness"] = (
-                "Some attributes have significant missing data: " +
-                ", ".join([f"{k} ({v})" for k, v in missing_details.items()])
-            )
-        else:
-            insights["Data Completeness"] = "All attributes have good data coverage."
-
-        # 4. Time Series Insights (if any datetime columns exist)
-        time_series_insights = {}
-        if dt_cols and num_cols:
-            for dt in dt_cols:
-                start_date = df[dt].min().date()
-                end_date = df[dt].max().date()
-                time_series_insights[dt] = f"Data in '{dt}' spans from {start_date} to {end_date}."
-                # As an example, group by month using the first numeric column (that isn't datetime)
-                numeric_example = next((col for col in num_cols if col not in dt_cols), None)
-                if numeric_example:
-                    df['__month__'] = df[dt].dt.to_period('M')
-                    trend = df.groupby('__month__')[numeric_example].mean().reset_index()
-                    if not trend.empty:
-                        best_idx = trend[numeric_example].idxmax()
-                        worst_idx = trend[numeric_example].idxmin()
-                        best_month = trend.loc[best_idx, '__month__']
-                        best_value = np.round(trend.loc[best_idx, numeric_example], 2)
-                        worst_month = trend.loc[worst_idx, '__month__']
-                        worst_value = np.round(trend.loc[worst_idx, numeric_example], 2)
-                        time_series_insights[f"{dt} Trend for {numeric_example}"] = (
-                            f"For {numeric_example} based on '{dt}', the highest monthly average was in {best_month} at {best_value}, "
-                            f"and the lowest in {worst_month} at {worst_value}."
+    def _generate_insights(self):
+        """Generate business insights based on data patterns"""
+        insights = []
+        
+        # Missing values insight
+        missing_values = self.df.isnull().sum()
+        if missing_values.sum() > 0:
+            insights.append("⚠️ Data Quality Note: Found missing values in columns - " + 
+                          ", ".join([f"{col} ({count})" for col, count in missing_values[missing_values > 0].items()]))
+        
+        # Numeric correlations
+        if len(self.column_types['numeric']) > 1:
+            corr_matrix = self.df[self.column_types['numeric']].corr().abs()
+            high_corr = corr_matrix[(corr_matrix > 0.7) & (corr_matrix < 1)]
+            if not high_corr.stack().empty:
+                strongest = high_corr.stack().idxmax()
+                insights.append(f"📈 Strong relationship between {strongest[0]} and {strongest[1]} (consider analyzing together)")
+        
+        # Category-numeric relationships
+        if self.column_types['categorical'] and self.column_types['numeric']:
+            for cat_col in self.column_types['categorical']:
+                for num_col in self.column_types['numeric']:
+                    grouped = self.df.groupby(cat_col)[num_col].mean()
+                    if grouped.max() / grouped.min() > 2:
+                        insights.append(
+                            f"🔍 {cat_col} significantly affects {num_col}: "
+                            f"{grouped.idxmax} has {grouped.max():.1f} vs {grouped.idxmin} {grouped.min():.1f}"
                         )
-                    df.drop(columns='__month__', inplace=True)
-        if time_series_insights:
-            insights["Time Series Insights"] = time_series_insights
-
-        # 5. Additional General Observations
-        insights["General Observations"] = (
-            "The insights above highlight key performance metrics and differences across groups, "
-            "as well as data quality and time-based trends that may require attention."
-        )
-
+        
+        # Time-based trends
+        for date_col in self.column_types['datetime']:
+            if self.column_types['numeric']:
+                time_series = self.df.set_index(date_col)[self.column_types['numeric'][0]].resample('M').mean()
+                if time_series.pct_change().mean() > 0.1:
+                    insights.append(f"📅 Clear upward trend in {self.column_types['numeric'][0]} over time")
+                elif time_series.pct_change().mean() < -0.1:
+                    insights.append(f"📅 Downward trend observed in {self.column_types['numeric'][0]} over time")
+        
         return insights
 
-    def generate_management_summary(self):
-        """
-        Combine the basic summary and insights into a plain-language executive summary.
-        This summary is tailored for higher management.
-        """
-        basic = self.basic_summary
-        insights = self.insights
+    def show_report(self):
+        """Generate final formatted report"""
+        report = [
+            "📊 Data Overview:",
+            self.summary,
+            "\n🔑 Key Insights:",
+            *self.insights
+        ]
+        return "\n".join(report)
 
-        summary_text = "\nExecutive Summary for Management:\n"
-        summary_text += "-------------------------------------\n"
-        summary_text += f"- Total Records: {basic['Total Records']}\n"
-        summary_text += f"- Total Attributes: {basic['Total Attributes']}\n"
-        summary_text += f"- Missing Values: {basic['Total Missing Values']}\n"
-        summary_text += f"- Duplicate Records: {basic['Duplicate Records']}\n\n"
-
-        summary_text += "Key Insights:\n"
-        for key, value in insights.items():
-            if isinstance(value, dict):
-                summary_text += f"\n* {key}:\n"
-                for sub_key, sub_value in value.items():
-                    summary_text += f"    - {sub_value}\n"
-            else:
-                summary_text += f"- {value}\n"
-
-        summary_text += "\nThese insights provide a concise yet comprehensive view of performance, trends, and data quality."
-        return summary_text
-
-    def run(self):
-        """Generate and print the executive summary."""
-        management_summary = self.generate_management_summary()
-        print(management_summary)
-
-
-# Example Usage:
+# Example usage
 if __name__ == "__main__":
-    generator = ExecutiveSummaryGenerator("your_data.csv")
-    generator.run()
+    # Create sample data
+    data = {
+        'Sales': [100, 150, 200, 180, 300],
+        'Region': ['North', 'North', 'South', 'South', 'West'],
+        'Date': pd.date_range(start='2023-01-01', periods=5),
+        'Customer Rating': [4.5, 4.8, 3.9, 4.2, 4.7]
+    }
+    
+    df = pd.DataFrame(data)
+    analyzer = DataFrameInsightGenerator(df)
+    print(analyzer.show_report())
