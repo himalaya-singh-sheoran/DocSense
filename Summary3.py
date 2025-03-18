@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
+import warnings
 from datetime import datetime
+
 class DataFrameInsightGenerator:
     def __init__(self, dataframe):
         self.df = dataframe.copy()
@@ -105,20 +107,27 @@ class DataFrameInsightGenerator:
             for cat_col in self.column_types['categorical']:
                 for num_col in self.column_types['numeric']:
                     grouped = self.df.groupby(cat_col)[num_col].mean()
-                    if grouped.max() / grouped.min() > 2:
+                    # Avoid division by zero and ensure meaningful ratio
+                    if grouped.min() > 0 and (grouped.max() / grouped.min() > 2):
                         insights.append(
                             f"🔍 {cat_col} significantly affects {num_col}: "
-                            f"{grouped.idxmax} has {grouped.max():.1f} vs {grouped.idxmin} {grouped.min():.1f}"
+                            f"{grouped.idxmax()} has {grouped.max():.1f} vs {grouped.idxmin()} with {grouped.min():.1f}"
                         )
         
         # Time-based trends
         for date_col in self.column_types['datetime']:
             if self.column_types['numeric']:
-                time_series = self.df.set_index(date_col)[self.column_types['numeric'][0]].resample('M').mean()
-                if time_series.pct_change().mean() > 0.1:
-                    insights.append(f"📅 Clear upward trend in {self.column_types['numeric'][0]} over time")
-                elif time_series.pct_change().mean() < -0.1:
-                    insights.append(f"📅 Downward trend observed in {self.column_types['numeric'][0]} over time")
+                try:
+                    # Set the datetime column as index and resample monthly on the first numeric column
+                    time_series = self.df.set_index(date_col)[self.column_types['numeric'][0]].resample('M').mean()
+                    pct_change = time_series.pct_change().mean()
+                    if pct_change > 0.1:
+                        insights.append(f"📅 Clear upward trend in {self.column_types['numeric'][0]} over time")
+                    elif pct_change < -0.1:
+                        insights.append(f"📅 Downward trend observed in {self.column_types['numeric'][0]} over time")
+                except Exception as e:
+                    # If resampling fails, skip this date column.
+                    continue
         
         return insights
 
