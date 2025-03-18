@@ -1,10 +1,9 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
-
 class DataFrameInsightGenerator:
     def __init__(self, dataframe):
-        self.df = dataframe
+        self.df = dataframe.copy()
         self.column_types = self._identify_column_types()
         self.summary = self._generate_summary()
         self.insights = self._generate_insights()
@@ -21,11 +20,25 @@ class DataFrameInsightGenerator:
             if np.issubdtype(self.df[col].dtype, np.number):
                 column_types['numeric'].append(col)
             elif self.df[col].dtype == 'object':
-                try:
-                    self.df[col] = pd.to_datetime(self.df[col])
-                    column_types['datetime'].append(col)
-                except:
-                    column_types['categorical'].append(col)
+                # Attempt datetime conversion with warning suppression
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    try:
+                        # Try inferring datetime with mixed format support
+                        self.df[col] = pd.to_datetime(
+                            self.df[col], 
+                            infer_datetime_format=True,
+                            errors='coerce'
+                        )
+                        # Only consider as datetime if at least 50% values converted
+                        if self.df[col].notna().mean() > 0.5:
+                            column_types['datetime'].append(col)
+                        else:
+                            column_types['categorical'].append(col)
+                    except:
+                        column_types['categorical'].append(col)
+            elif pd.api.types.is_datetime64_any_dtype(self.df[col]):
+                column_types['datetime'].append(col)
             else:
                 column_types['categorical'].append(col)
                 
