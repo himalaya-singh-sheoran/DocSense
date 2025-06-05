@@ -1,72 +1,55 @@
-import msal
 import requests
+from msal import ConfidentialClientApplication
 
-# Azure AD app registration details
-tenant_id = 'your-tenant-id'
-client_id = 'your-client-id'
-client_secret = 'your-client-secret'
+# Replace these with your actual values
+TENANT_ID = 'your-tenant-id'
+CLIENT_ID = 'your-client-id'
+CLIENT_SECRET = 'your-client-secret'
+SHAREPOINT_SITE_NAME = 'your-site-name'           # e.g. 'contoso'
+SHAREPOINT_SITE_HOST = 'yourdomain.sharepoint.com'
+SHAREPOINT_DOC_LIB = 'Shared Documents'           # default library
+FILE_PATH = 'Folder1/Folder2/filename.xlsx'       # path in doc library
+DOWNLOAD_PATH = 'downloaded_file.xlsx'            # local path
 
-# SharePoint site and list details
-site_domain = 'yourtenant.sharepoint.com'
-site_path = '/sites/yoursite'
-list_name = 'Your List Name'
+# Get token using MSAL
+authority_url = f'https://login.microsoftonline.com/{TENANT_ID}'
+scope = ['https://graph.microsoft.com/.default']
 
-# Acquire token
-authority_url = f'https://login.microsoftonline.com/{tenant_id}'
-app = msal.ConfidentialClientApplication(
-    client_id,
+app = ConfidentialClientApplication(
+    CLIENT_ID,
     authority=authority_url,
-    client_credential=client_secret
+    client_credential=CLIENT_SECRET
 )
 
-scope = ['https://graph.microsoft.com/.default']
-result = app.acquire_token_for_client(scopes=scope)
+token_response = app.acquire_token_for_client(scopes=scope)
 
-if 'access_token' in result:
-    access_token = result['access_token']
-    headers = {
-        'Authorization': f'Bearer {access_token}',
-        'Accept': 'application/json'
-    }
+if "access_token" not in token_response:
+    raise Exception("Failed to acquire token: " + str(token_response))
 
-    # Construct the site URL
-    site_url = f'https://graph.microsoft.com/v1.0/sites/{site_domain}:{site_path}'
+access_token = token_response['access_token']
 
-    # Get the site ID
-    site_response = requests.get(site_url, headers=headers)
-    if site_response.status_code == 200:
-        site_data = site_response.json()
-        site_id = site_data['id']
+# Get Site ID
+site_url = f"https://graph.microsoft.com/v1.0/sites/{SHAREPOINT_SITE_HOST}:/sites/{SHAREPOINT_SITE_NAME}"
+headers = {'Authorization': f'Bearer {access_token}'}
+site_resp = requests.get(site_url, headers=headers)
+site_resp.raise_for_status()
+site_id = site_resp.json()['id']
 
-        # Get the list ID by list name
-        lists_url = f'https://graph.microsoft.com/v1.0/sites/{site_id}/lists'
-        lists_response = requests.get(lists_url, headers=headers)
-        if lists_response.status_code == 200:
-            lists_data = lists_response.json()
-            list_id = None
-            for lst in lists_data.get('value', []):
-                if lst['name'] == list_name:
-                    list_id = lst['id']
-                    break
+# Get Drive ID (usually the default document library)
+drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
+drive_resp = requests.get(drive_url, headers=headers)
+drive_resp.raise_for_status()
+drive_id = drive_resp.json()['value'][0]['id']
 
-            if list_id:
-                # Retrieve list items
-                items_url = f'https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items?expand=fields'
-                items_response = requests.get(items_url, headers=headers)
-                if items_response.status_code == 200:
-                    items = items_response.json().get('value', [])
-                    for item in items:
-                        print(item['fields'])
-                else:
-                    print(f"Error retrieving list items: {items_response.status_code}")
-            else:
-                print(f"List '{list_name}' not found.")
-        else:
-            print(f"Error retrieving lists: {lists_response.status_code}")
-    else:
-        print(f"Error retrieving site ID: {site_response.status_code}")
-else:
-    print(f"Error acquiring token: {result.get('error')}")
-    print(result.get('error_description'))
+# Get File ID
+file_metadata_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{FILE_PATH}"
+file_resp = requests.get(file_metadata_url, headers=headers)
+file_resp.raise_for_status()
+download_url = file_resp.json()['@microsoft.graph.downloadUrl']
 
+# Download file
+download_resp = requests.get(download_url)
+with open(DOWNLOAD_PATH, 'wb') as f:
+    f.write(download_resp.content)
 
+print(f"✅ File downloaded successfully to: {DOWNLOAD_PATH}")
